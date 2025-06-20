@@ -1,5 +1,6 @@
 import spacy
 import re
+import os
 import fitz  # PyMuPDF
 from typing import List, Tuple
 import argparse
@@ -116,7 +117,7 @@ class PDFRedactor:
         return font_size
     
     
-    def redact_pdf(self, input_path: str, output_path: str):
+    def redact_pdf(self, input_path: str):
         """Main redaction function"""
         # Validate input file
         if not input_path.lower().endswith('.pdf'):
@@ -144,12 +145,9 @@ class PDFRedactor:
                 all_matches = regex_matches + ner_matches
                 merged_matches = self.merge_overlapping_matches(all_matches)
                 
-                print(f"Page {page_num + 1}: Found {len(merged_matches)} PII instances")
-                
                 # Convert text positions to rectangles for redaction
                 for start_pos, end_pos, match_type in merged_matches:
                     pii_text = full_text[start_pos:end_pos]
-                    print(f"  - {match_type}: {pii_text}")
                     
                     # Find all occurrences of this text on the page
                     text_rects = page.search_for(pii_text)
@@ -166,8 +164,9 @@ class PDFRedactor:
             
             # Save redacted PDF
             try:
+                filename = os.path.basename(input_path)
+                output_path = f"documents/redacted_{filename}"
                 doc.save(output_path)
-                print(f"Redacted PDF saved to: {output_path}")
             except Exception as e:
                 raise Exception(f"Failed to save redacted PDF: {str(e)}")
                 
@@ -179,8 +178,6 @@ class PDFRedactor:
 def main():
     parser = argparse.ArgumentParser(description="Redact PII from PDF files")
     parser.add_argument("input_pdf", help="Path to input PDF file")
-    parser.add_argument("-o", "--output", help="Path to output redacted PDF", 
-                       default="redacted_output.pdf")
     
     args = parser.parse_args()
     
@@ -196,7 +193,7 @@ def main():
     
     try:
         redactor = PDFRedactor()
-        redactor.redact_pdf(args.input_pdf, args.output)
+        redactor.redact_pdf(args.input_pdf)
         print("Redaction completed successfully!")
         
     except FileNotFoundError as e:
