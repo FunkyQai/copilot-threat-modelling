@@ -16,14 +16,18 @@ class PDFRedactor:
         
         # Regex patterns for PII detection
         self.patterns = {
-            'nric_fin': re.compile(r'\b[A-Za-z]\d{7}[A-Za-z]\b'),
-            'phone_singapore': re.compile(r'\b[689]\d{7}\b'),
-            'phone_international': re.compile(r'\+\d{1,3}\s?\d{4,}\b'),
-            'email': re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),
-            'ipv4': re.compile(r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'),
-            'ipv6': re.compile(r'\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b|::1\b|::ffff:[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\b'),
-            'credit_card_16': re.compile(r'\b\d{16}\b'),
-            'credit_card_spaced': re.compile(r'\b\d{4}\s\d{4}\s\d{4}\s\d{4}\b'),
+            'NRIC/FIN': re.compile(r'\b[FGMSTfgmst]\d{7}[A-Za-z]\b'),
+            'SG_Passport': re.compile(r'\b[eE]\d{7}[A-Za-z]\b'),
+            'SG_Phone': re.compile(r'\b[689]\d{3}[\s-]?\d{4}\b'),
+            'INTL_PHONE': re.compile(r'\+\d{1,3}[\s-]?\d{4,}\b'),
+            'EMAIL': re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),
+            'IPV4': re.compile(r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'),
+            'IPV6': re.compile(r'\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b|::1\b|::ffff:[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\b'),
+            'CREDIT_CARD': re.compile(r'\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b'),
+            'KRISFLYER_NUM': re.compile(r'\b\d{10}\b'),
+            'FLIGHT_TICKET': re.compile(r'\b\d{3}-?\d{10,11}\b'),
+            'PLANE_SEAT': re.compile(r'\b([1-9]\d?|\d{3})([A-HJ-K])\b'),
+            'BOOKING_PNR': re.compile(r'\b[A-HJ-NP-Z0-9]{6}\b')
         }
     
     def find_regex_matches(self, text: str) -> List[Tuple[int, int, str]]:
@@ -51,30 +55,47 @@ class PDFRedactor:
         
         for ent in doc.ents:
             if ent.label_ == "PERSON":
-                matches.append((ent.start_char, ent.end_char, "person_name"))
+                matches.append((ent.start_char, ent.end_char, "PERSON_NAME"))
             elif ent.label_ in ["GPE", "LOC", "FAC"]:
-                matches.append((ent.start_char, ent.end_char, "address"))
+                matches.append((ent.start_char, ent.end_char, "ADDRESS"))
         
         return matches
     
     def merge_overlapping_matches(self, matches: List[Tuple[int, int, str]]) -> List[Tuple[int, int, str]]:
-        """Merge overlapping matches to avoid double redaction"""
+        """Keep only the largest match from each group of overlapping matches"""
         if not matches:
             return []
         
         # Sort by start position
         sorted_matches = sorted(matches, key=lambda x: x[0])
-        merged = [sorted_matches[0]]
+        result = []
+        used = set()  # Track which matches we've already processed
         
-        for current in sorted_matches[1:]:
-            last = merged[-1]
-            # If current overlaps with last, merge them
-            if current[0] <= last[1]:
-                merged[-1] = (last[0], max(last[1], current[1]), f"{last[2]}+{current[2]}")
-            else:
-                merged.append(current)
+        for i, match1 in enumerate(sorted_matches):
+            if i in used:
+                continue
+                
+            # Find all matches that overlap with match1
+            overlapping_group = [match1]
+            overlapping_indices = [i]
+            
+            for j, match2 in enumerate(sorted_matches):
+                if j <= i or j in used:
+                    continue
+                    
+                # Check if match1 and match2 overlap
+                if (match1[0] < match2[1] and match1[1] > match2[0]):
+                    overlapping_group.append(match2)
+                    overlapping_indices.append(j)
+            
+            # Find the biggest match in this overlapping group
+            biggest_match = max(overlapping_group, key=lambda x: x[1] - x[0])
+            result.append(biggest_match)
+            
+            # Mark all overlapping matches as used
+            used.update(overlapping_indices)
         
-        return merged
+        return result
     
     def calculate_font_size(self, rect, text: str) -> int:
         """Calculate appropriate font size based on rectangle dimensions"""
