@@ -168,7 +168,7 @@ class PDFRedactor:
             # Save redacted PDF
             try:
                 filename = os.path.basename(input_path)
-                output_path = f"documents/redacted_{filename}"
+                output_path = f"processed/redacted_{filename}"
                 doc.save(output_path)
                 return output_path
             
