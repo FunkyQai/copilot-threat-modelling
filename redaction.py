@@ -117,8 +117,11 @@ class PDFRedactor:
         return font_size
     
     
-    def redact_pdf(self, input_path: str):
-        """Main redaction function"""
+    def redact_pdf(self, input_path: str) -> str:
+        """
+        Main redaction function
+        returns the output path
+        """
         # Validate input file
         if not input_path.lower().endswith('.pdf'):
             raise ValueError("Input file must be a PDF")
@@ -167,6 +170,8 @@ class PDFRedactor:
                 filename = os.path.basename(input_path)
                 output_path = f"documents/redacted_{filename}"
                 doc.save(output_path)
+                return output_path
+            
             except Exception as e:
                 raise Exception(f"Failed to save redacted PDF: {str(e)}")
                 

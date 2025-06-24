@@ -75,8 +75,41 @@ class PDFSplitter:
         output_filename = f"{output_dir}/group_{group_number}.png"
         combined_img.save(output_filename)
         return output_filename
+    
+    def compress_image(self, input_path, output_path, quality):
+        """Compress image while maintaining reasonable quality"""
+        with Image.open(input_path) as img:
+            # Convert to RGB if necessary
+            if img.mode in ('RGBA', 'P'):
+                img = img.convert('RGB')
+            
+            # Save with compression
+            img.save(output_path, 'JPEG', quality=quality, optimize=True)
 
-    def split_pdf(self, filepath: str, pages_per_group: int = 5, output_dir: str = "processed"):
+    def batch_compress(self, directory='processed', quality=50):
+        """Batch compress all images in a directory"""
+        if not os.path.exists(directory):
+            print(f"Directory {directory} does not exist")
+            return
+            
+        compressed_files = []
+        for filename in os.listdir(directory):
+            if filename.lower().endswith('.png') and not filename.startswith('compressed_'):
+                input_path = os.path.join(directory, filename)
+                # Change extension to .jpg for compressed files
+                base_name = os.path.splitext(filename)[0]
+                output_path = os.path.join(directory, f"compressed_{base_name}.jpg")
+                
+                try:
+                    self.compress_image(input_path, output_path, quality)
+                    compressed_files.append(output_path)
+                    print(f"Compressed {filename} -> {os.path.basename(output_path)}")
+                except Exception as e:
+                    print(f"Error compressing {filename}: {e}")
+        
+        return compressed_files
+
+    def split_pdf(self, filepath: str, pages_per_group: int = 3, output_dir: str = "processed"):
         """
         Main function to split PDF into grouped PNG images.
         
@@ -99,7 +132,11 @@ class PDFSplitter:
                 created_files.append(output_filename)
                 print(f"Saved {output_filename} with {len(group)} pages")
         
-        print(f"Created {len(created_files)} group images")
+        # # Compress images in the output directory
+        # self.batch_compress(output_dir)
+
+        # print(f"Compressed images saved in {output_dir}")
+        print(f"Processed {len(created_files)} groups into PNG images in {output_dir}")
 
 
 if __name__ == "__main__":
@@ -109,5 +146,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     splitter = PDFSplitter()
-    splitter.split_pdf(args.input_pdf, pages_per_group=5, output_dir="processed")
+    splitter.split_pdf(args.input_pdf, output_dir="processed")
 
